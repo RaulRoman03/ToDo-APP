@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ToDo-APP</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <header>
+        <nav>
+            <h1>ToDo-APP</h1>
+        </nav>
+    </header>
+    <main>
+        <!-- Formulario para añadir nuevas tareas -->
+        <form action="{{ url_for('home') }}" class="input_container" method="POST">
+            <input type="text" placeholder="Add a new task" id="input_todo" name="todo_name" required>
+            <button id="add_todo" title="Add task">+</button>
+        </form>
+
+        <!-- Título de la lista de tareas -->
+        <h2>Your Task List</h2>
+
+        <!-- Contenedor de tareas -->
+        <div class="todo_container">
+            {% for item in items %}
+            <div class="todo">
+                <!-- Formulario para marcar tarea como completada -->
+                <form action="{{ url_for('checked_todo', todo_id=item.id) }}" method="POST">
+                    <span class="checkmark-container">
+                        <input type="checkbox" id="check-{{ item.id }}" {% if item.checked %}checked{% endif %} onchange="this.form.submit()">
+                        <label for="check-{{ item.id }}" class="checkmark"></label>
+                    </span>
+                </form>
+
+                <!-- Texto editable de la tarea -->
+                <p id="paragraph-{{ item.id }}" class="editable" contenteditable="false" onblur="updateTodoName('{{ item.id }}')">{{ item.name }}</p>
+
+                <!-- Botones de acción (Editar y Eliminar) -->
+                <div class="actions">
+                    <span id="edit-button-{{ item.id }}" class="edit-button" onclick="toggleEdit('{{ item.id }}')">Edit</span>
+                    <form action="{{ url_for('delete_todo', todo_id=item.id) }}" method="POST">
+                        <button class="delete-button" title="Delete task">Delete</button>
+                    </form>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </main>
+
+    <script>
+        // Habilitar o deshabilitar edición de tareas
+        function toggleEdit(todoId) {
+            var p = document.getElementById('paragraph-' + todoId);
+            var button = document.getElementById('edit-button-' + todoId);
+            var isEditable = p.getAttribute('contenteditable') === 'true';
+
+            if (isEditable) {
+                p.setAttribute('contenteditable', 'false');
+                p.style.border = 'none';
+                button.textContent = 'Edit';
+                updateTodoName(todoId);
+            } else {
+                p.setAttribute('contenteditable', 'true');
+                p.style.border = '1px solid #ddd';
+                p.style.backgroundColor = '#fff';
+                p.focus();
+                button.textContent = 'Save';
+            }
+        }
+
+        // Actualizar el nombre de la tarea
+        function updateTodoName(todoId) {
+            var p = document.getElementById('paragraph-' + todoId);
+            var newName = p.innerText.trim();
+
+            if (newName !== '') {
+                var xhr = new XMLHttpRequest();
+                xhr.open("POST", "/edit_todo/" + todoId, true);
+                xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
+                xhr.onload = function() {
+                    if (xhr.status === 200) {
+                        console.log('Update successful');
+                    } else {
+                        console.log('Update failed: ' + xhr.status);
+                    }
+                };
+                xhr.send("new_text=" + encodeURIComponent(newName));
+            }
+        }
+    </script>
+</body>
+</html>

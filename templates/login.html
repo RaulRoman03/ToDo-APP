@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login - ToDo-APP</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/auth_style.css') }}">
+</head>
+<body>
+    <header>
+        <nav>
+            <h1>ToDo-APP</h1>
+        </nav>
+    </header>
+    <main>
+        <div class="todo_container">
+            <!-- Título de inicio de sesión -->
+            <h2>Iniciar Sesión</h2>
+
+            <!-- Formulario de inicio de sesión -->
+            <form method="POST" action="/login">
+                <!-- Mensajes de error o éxito -->
+                {% if error_message %}
+                    <div class="alert error">{{ error_message }}</div>
+                {% endif %}
+                {% if success_message %}
+                    <div class="alert success">{{ success_message }}</div>
+                {% endif %}
+                
+                <!-- Campo de usuario con ícono -->
+                <div class="input_container input_with_icon">
+                    <span class="icon">&#128100;</span>
+                    <input type="text" name="username" placeholder="Usuario" id="username" required>
+                </div>
+
+                <!-- Campo de contraseña con ícono -->
+                <div class="input_container input_with_icon">
+                    <span class="icon">&#128273;</span>
+                    <input type="password" name="password" placeholder="Contraseña" id="password" required>
+                </div>
+
+                <!-- Botón de inicio de sesión -->
+                <button type="submit" title="Iniciar sesión">Iniciar Sesión</button>
+            </form>
+
+            <!-- Enlace para registrarse -->
+            <p>¿No tienes cuenta? <a href="{{ url_for('register') }}">Regístrate aquí</a></p>
+        </div>
+    </main>
+</body>
+</html>

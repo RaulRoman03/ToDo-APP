@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Registro - OrganizeOasis</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/auth_style.css') }}">
+</head>
+<body>
+    <header>
+        <nav>
+            <h1>OrganizeOasis</h1>
+        </nav>
+    </header>
+    <main>
+        <div class="todo_container">
+            <!-- Título de registro -->
+            <h2>Registro</h2>
+
+            <!-- Formulario de registro -->
+            <form method="POST" action="/register">
+                <!-- Mensajes de error o éxito -->
+                {% if error_message %}
+                    <div class="alert error">{{ error_message }}</div>
+                {% endif %}
+                {% if success_message %}
+                    <div class="alert success">{{ success_message }}</div>
+                {% endif %}
+                
+                <!-- Campo de nombre con ícono -->
+                <div class="input_container input_with_icon">
+                    <span class="icon">&#128100;</span>
+                    <input type="text" name="firstname" placeholder="Nombre" id="firstname" required>
+                </div>
+
+                <!-- Campo de apellido con ícono -->
+                <div class="input_container input_with_icon">
+                    <span class="icon">&#128100;</span>
+                    <input type="text" name="lastname" placeholder="Apellido" id="lastname" required>
+                </div>
+
+                <!-- Campo de correo electrónico con ícono -->
+                <div class="input_container input_with_icon">
+                    <span class="icon">&#9993;</span>
+                    <input type="email" name="email" placeholder="Correo Electrónico" id="email" required>
+                </div>
+
+                <!-- Campo de nombre de usuario con ícono -->
+                <div class="input_container input_with_icon">
+                    <span class="icon">&#128100;</span>
+                    <input type="text" name="username" placeholder="Usuario" id="username" required>
+                </div>
+
+                <!-- Campo de contraseña con ícono -->
+                <div class="input_container input_with_icon">
+                    <span class="icon">&#128273;</span>
+                    <input type="password" name="password" placeholder="Contraseña" id="password" required>
+                </div>
+
+                <!-- Botón de registro -->
+                <button type="submit" title="Registrarse">Registrarse</button>
+            </form>
+
+            <!-- Enlace para iniciar sesión -->
+            <p>¿Ya tienes cuenta? <a href="{{ url_for('login') }}">Inicia sesión aquí</a></p>
+        </div>
+    </main>
+</body>
+</html>
