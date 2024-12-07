@@ -8,7 +8,7 @@ from flask_mysqldb import MySQL
 from flask_bcrypt import Bcrypt
 import MySQLdb.cursors
 from authlib.integrations.flask_client import OAuth
-from dotenv import load_dotenv, find_dotenv
+from dotenv import load_dotenv
 
 app = Flask(__name__)
 app.secret_key = os.getenv("FLASK_SECRET_KEY", "default_secret_key")
