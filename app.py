@@ -7,9 +7,11 @@ import os
 from flask_mysqldb import MySQL
 from flask_bcrypt import Bcrypt
 import MySQLdb.cursors
+from authlib.integrations.flask_client import OAuth
+from dotenv import load_dotenv, find_dotenv
 
 app = Flask(__name__)
-app.secret_key = 'your_secret_key'
+app.secret_key = os.getenv("FLASK_SECRET_KEY", "default_secret_key")
 
 # MongoDB connection (para la lista de tareas)
 client = MongoClient('mongodb://localhost:27017/')
@@ -27,7 +29,6 @@ else:
         key_file.write(key)
 cipher_suite = Fernet(key)
 
-
 # Configuración de MySQL (para registro y login)
 app.config['MYSQL_HOST'] = 'localhost'
 app.config['MYSQL_USER'] = 'root'
@@ -38,6 +39,26 @@ app.config['MYSQL_DB'] = 'Users_Login'
 mysql = MySQL(app)
 bcrypt = Bcrypt(app)
 
+# Configurar OAuth
+load_dotenv(dotenv_path='C:/Users/raulr/OneDrive/Escritorio/TODO-LIST/variables.env')
+print("GOOGLE_CLIENT_ID:", os.getenv('GOOGLE_CLIENT_ID'))
+print("GOOGLE_CLIENT_SECRET:", os.getenv('GOOGLE_CLIENT_SECRET'))
+app.config['GOOGLE_CLIENT_ID'] = os.getenv('GOOGLE_CLIENT_ID')
+app.config['GOOGLE_CLIENT_SECRET'] = os.getenv('GOOGLE_CLIENT_SECRET')
+app.config['OAUTHLIB_INSECURE_TRANSPORT'] = '1'  # Solo para desarrollo local
+app.secret_key = os.getenv("FLASK_SECRET_KEY", "default_secret_key")
+oauth = OAuth(app)
+
+google = oauth.register(
+    name='google',
+    client_id=app.config['GOOGLE_CLIENT_ID'],
+    client_secret=app.config['GOOGLE_CLIENT_SECRET'],
+    access_token_url='https://accounts.google.com/o/oauth2/token',
+    authorize_url='https://accounts.google.com/o/oauth2/auth',
+    api_base_url='https://www.googleapis.com/oauth2/v1/',
+    client_kwargs={'scope': 'openid email profile'}
+)
+
 # ------------- RUTAS PARA REGISTRO Y LOGIN (SQL) -----------------
 @app.route('/register', methods=['GET', 'POST'])
 def register():
@@ -47,11 +68,7 @@ def register():
         email = request.form['email']
         username = request.form['username']
         password = request.form['password']
-        print(f"Encryption key: {key}")
-        # Cifrar el correo
-        encrypted_email = cipher_suite.encrypt(email.encode()).decode('utf-8')
-        print(f"Encrypted email before storing: {encrypted_email}")
-        
+
         # Cifrar la contraseña
         hashed_password = bcrypt.generate_password_hash(password).decode('utf-8')
 
@@ -60,7 +77,7 @@ def register():
         cursor.execute("""
             INSERT INTO users (username, email, firstname, lastname, password) 
             VALUES (%s, %s, %s, %s, %s)
-        """, (username, encrypted_email, firstname, lastname, hashed_password))
+        """, (username, email, firstname, lastname, hashed_password))
         mysql.connection.commit()
         cursor.close()
 
@@ -87,19 +104,7 @@ def login():
             if bcrypt.check_password_hash(user['password'], password_candidate):
                 session['loggedin'] = True
                 session['username'] = username
-                print(f"Decryption key: {key}")
-                # Verificar el correo cifrado antes de descifrar
-                print(f"Encrypted email from DB: {user['email']}")
-                
-                try:
-                    # Descifrar el correo
-                    decrypted_email = cipher_suite.decrypt(user['email'].encode()).decode('utf-8')
-                    session['email'] = decrypted_email
-                except cryptography.fernet.InvalidToken:
-                    print("Error: InvalidToken al descifrar el correo.")
-                    flash('Error al descifrar el correo.')
-                    return redirect(url_for('login'))
-                
+                session['email'] = user['email']
                 flash('Inicio de sesión exitoso.')
                 return redirect(url_for('home'))
             else:
@@ -109,15 +114,64 @@ def login():
 
     return render_template('login.html')
 
+# OAuth 2.0 Login
+@app.route('/google/login')
+def google_login():
+    state = str(uuid.uuid4())  # Generar un nuevo valor de estado
+    session['oauth_state'] = state  # Guardarlo en la sesión
+    redirect_uri = url_for('google_callback', _external=True)
+    return google.authorize_redirect(redirect_uri, state=state)
 
+@app.route('/google/callback')
+def google_callback():
+    try:
+        # Verificar el estado antes de continuar
+        if request.args.get('state') != session.get('oauth_state'):
+            raise Exception("State mismatch error!")
+
+        # Continuar con la autenticación de Google
+        token = google.authorize_access_token()
+        user_info = google.get('userinfo').json()
+
+        # Verificar si el usuario ya existe en la base de datos
+        cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
+        cursor.execute("SELECT * FROM users WHERE email = %s", [user_info['email']])
+        user = cursor.fetchone()
+
+        if not user:
+            # Crear un nuevo usuario si no existe
+            hashed_password = bcrypt.generate_password_hash(str(uuid.uuid4())).decode('utf-8')
+            cursor.execute("""
+                INSERT INTO users (username, email, firstname, lastname, password) 
+                VALUES (%s, %s, %s, %s, %s)
+            """, (user_info['email'], user_info['email'], user_info['given_name'], user_info['family_name'], hashed_password))
+            mysql.connection.commit()
+
+        cursor.close()
+
+        # Iniciar sesión y almacenar información en la sesión
+        session['loggedin'] = True
+        session['username'] = user_info['email']
+        session['email'] = user_info['email']
+        session['name'] = user_info['name']
+        session['picture'] = user_info.get('picture', '')
+
+        flash('Inicio de sesión con Google exitoso.')
+        return redirect(url_for('home'))
+
+    except Exception as e:
+        flash(f"Error durante la autenticación con Google: {e}")
+        return redirect(url_for('login'))
 
 @app.route('/logout')
 def logout():
     session.pop('loggedin', None)
     session.pop('username', None)
     session.pop('email', None)
+    session.pop('name', None)
+    session.pop('picture', None)
     flash('Has cerrado sesión.')
-    return redirect(url_for('login'))
+    return redirect(url_for('home'))
 
 # ------------- RUTAS PARA LA LISTA DE TAREAS (MongoDB) -----------------
 @app.route("/", methods=["GET", "POST"])
@@ -126,28 +180,32 @@ def home():
     if 'loggedin' not in session:
         return redirect(url_for('login'))
     
-    user_id = session.get('username')  # Usar el nombre de usuario o un identificador único
+    user_id = session.get('username')
 
     if request.method == "POST":
         todo_name = request.form.get("todo_name", "").strip()
+        priority = request.form.get("priority", "3")
         if todo_name:
             encrypted_name = cipher_suite.encrypt(todo_name.encode()).decode()
             todos_collection.insert_one({
                 'user_id': user_id,
                 'id': str(uuid.uuid4()),
                 'name': encrypted_name,
-                'checked': False
+                'checked': False,
+                'priority': priority
             })
     
-    todos = todos_collection.find({'user_id': user_id})  # Filtrar tareas por usuario
+    todos = todos_collection.find({'user_id': user_id})
     decrypted_todos = []
     for todo in todos:
         try:
             decrypted_name = cipher_suite.decrypt(todo['name'].encode()).decode()
+            priority = todo['priority']
             decrypted_todos.append({
                 'id': todo['id'],
                 'name': decrypted_name,
-                'checked': todo['checked']
+                'checked': todo['checked'],
+                'priority': priority
             })
         except cryptography.fernet.InvalidToken:
             print(f"InvalidToken error for todo ID: {todo['id']}")
@@ -172,18 +230,23 @@ def delete_todo(todo_id):
 @app.route("/edit_todo/<todo_id>", methods=["POST"])
 def edit_todo(todo_id):
     new_content = request.form.get('new_text', "").strip()
+    new_priority = request.form.get('priority', "3")
+
     if new_content:
         encrypted_name = cipher_suite.encrypt(new_content.encode()).decode()
+
         result = todos_collection.update_one(
             {'id': todo_id},
-            {'$set': {'name': encrypted_name}}
+            {'$set': {'name': encrypted_name, 'priority': new_priority}}
         )
+
         if result.modified_count == 0:
             print("No document was updated. Check the todo_id.")
     else:
         print("No new content provided.")
+    
     return redirect(url_for("home"))
 
 # Ejecutar la aplicación
-if __name__ == "__main__":
+if __name__ == "__main__":  
     app.run(debug=True)

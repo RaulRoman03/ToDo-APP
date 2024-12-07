@@ -17,16 +17,16 @@
             <!-- Título de inicio de sesión -->
             <h2>Iniciar Sesión</h2>
 
-            <!-- Formulario de inicio de sesión -->
+            <!-- Mensajes de error o éxito -->
+            {% if error_message %}
+                <div class="alert error">{{ error_message }}</div>
+            {% endif %}
+            {% if success_message %}
+                <div class="alert success">{{ success_message }}</div>
+            {% endif %}
+
+            <!-- Formulario de inicio de sesión tradicional -->
             <form method="POST" action="/login">
-                <!-- Mensajes de error o éxito -->
-                {% if error_message %}
-                    <div class="alert error">{{ error_message }}</div>
-                {% endif %}
-                {% if success_message %}
-                    <div class="alert success">{{ success_message }}</div>
-                {% endif %}
-                
                 <!-- Campo de usuario con ícono -->
                 <div class="input_container input_with_icon">
                     <span class="icon">&#128100;</span>
@@ -42,6 +42,19 @@
                 <!-- Botón de inicio de sesión -->
                 <button type="submit" title="Iniciar sesión">Iniciar Sesión</button>
             </form>
+
+            <!-- Separador o división visual -->
+            <div class="separator">
+                <span>o</span>
+            </div>
+
+            <!-- Opciones de inicio de sesión con OAuth 2.0 -->
+            <div class="oauth_buttons">
+                <button onclick="window.location.href='/google/login'" class="oauth google">
+                    <img src="{{ url_for('static', filename='img/google-icon.svg') }}" alt="Google">
+                    Inicia sesión con Google
+                </button>
+            </div>
 
             <!-- Enlace para registrarse -->
             <p>¿No tienes cuenta? <a href="{{ url_for('register') }}">Regístrate aquí</a></p>

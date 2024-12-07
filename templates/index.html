@@ -12,11 +12,17 @@
             <h1>ToDo-APP</h1>
         </nav>
     </header>
+
     <main>
         <!-- Formulario para añadir nuevas tareas -->
         <form action="{{ url_for('home') }}" class="input_container" method="POST">
             <input type="text" placeholder="Add a new task" id="input_todo" name="todo_name" required>
-            <button id="add_todo" title="Add task">+</button>
+            <select name="priority" id="priority" required>
+                <option value="1">Alta</option>
+                <option value="2">Media</option>
+                <option value="3" selected>Baja</option>
+            </select>
+            <button type="submit" id="add_todo" title="Add task">+</button>
         </form>
 
         <!-- Título de la lista de tareas -->
@@ -26,22 +32,48 @@
         <div class="todo_container">
             {% for item in items %}
             <div class="todo">
-                <!-- Formulario para marcar tarea como completada -->
-                <form action="{{ url_for('checked_todo', todo_id=item.id) }}" method="POST">
-                    <span class="checkmark-container">
-                        <input type="checkbox" id="check-{{ item.id }}" {% if item.checked %}checked{% endif %} onchange="this.form.submit()">
-                        <label for="check-{{ item.id }}" class="checkmark"></label>
+                <!-- Mostrar tarea (solo en modo de visualización) -->
+                <div class="task-display" id="task-display-{{ item.id }}" {% if item.id == editing_task_id %}style="display:none;"{% endif %}>
+                    <!-- Marcar tarea como completada -->
+                    <form action="{{ url_for('checked_todo', todo_id=item.id) }}" method="POST">
+                        <span class="checkmark-container">
+                            <input type="checkbox" id="check-{{ item.id }}" {% if item.checked %}checked{% endif %} onchange="this.form.submit()">
+                            <label for="check-{{ item.id }}" class="checkmark"></label>
+                        </span>
+                    </form>
+
+                    <p>{{ item.name }}</p>
+                    <span class="priority-label">
+                        {% if item.priority == '1' %}
+                            <span class="priority high">Alta</span>
+                        {% elif item.priority == '2' %}
+                            <span class="priority medium">Media</span>
+                        {% else %}
+                            <span class="priority low">Baja</span>
+                        {% endif %}
                     </span>
-                </form>
 
-                <!-- Texto editable de la tarea -->
-                <p id="paragraph-{{ item.id }}" class="editable" contenteditable="false" onblur="updateTodoName('{{ item.id }}')">{{ item.name }}</p>
-
-                <!-- Botones de acción (Editar y Eliminar) -->
-                <div class="actions">
-                    <span id="edit-button-{{ item.id }}" class="edit-button" onclick="toggleEdit('{{ item.id }}')">Edit</span>
+                    <button onclick="editTask('{{ item.id }}')">Edit</button>
                     <form action="{{ url_for('delete_todo', todo_id=item.id) }}" method="POST">
                         <button class="delete-button" title="Delete task">Delete</button>
+                    </form>
+                </div>
+
+                <!-- Formulario de edición (solo visible al editar la tarea) -->
+                <div class="task-edit" id="task-edit-{{ item.id }}" {% if item.id != editing_task_id %}style="display:none;"{% endif %}>
+                    <form action="{{ url_for('edit_todo', todo_id=item.id) }}" method="POST">
+                        <!-- Editar nombre -->
+                        <input type="text" name="new_text" value="{{ item.name }}" required>
+
+                        <!-- Editar prioridad -->
+                        <select name="priority" required>
+                            <option value="1" {% if item.priority == '1' %}selected{% endif %}>Alta</option>
+                            <option value="2" {% if item.priority == '2' %}selected{% endif %}>Media</option>
+                            <option value="3" {% if item.priority == '3' %}selected{% endif %}>Baja</option>
+                        </select>
+
+                        <button type="submit">Save</button>
+                        <button type="button" onclick="cancelEdit()">Cancel</button>
                     </form>
                 </div>
             </div>
@@ -50,44 +82,32 @@
     </main>
 
     <script>
-        // Habilitar o deshabilitar edición de tareas
-        function toggleEdit(todoId) {
-            var p = document.getElementById('paragraph-' + todoId);
-            var button = document.getElementById('edit-button-' + todoId);
-            var isEditable = p.getAttribute('contenteditable') === 'true';
+        var editing_task_id = null;
 
-            if (isEditable) {
-                p.setAttribute('contenteditable', 'false');
-                p.style.border = 'none';
-                button.textContent = 'Edit';
-                updateTodoName(todoId);
-            } else {
-                p.setAttribute('contenteditable', 'true');
-                p.style.border = '1px solid #ddd';
-                p.style.backgroundColor = '#fff';
-                p.focus();
-                button.textContent = 'Save';
-            }
+        // Función para mostrar el formulario de edición de la tarea
+        function editTask(taskId) {
+            editing_task_id = taskId;
+
+            // Ocultar la vista normal de la tarea
+            document.getElementById('task-display-' + taskId).style.display = 'none';
+
+            // Mostrar el formulario de edición
+            document.getElementById('task-edit-' + taskId).style.display = 'block';
         }
 
-        // Actualizar el nombre de la tarea
-        function updateTodoName(todoId) {
-            var p = document.getElementById('paragraph-' + todoId);
-            var newName = p.innerText.trim();
+        // Función para cancelar la edición y volver a la vista normal
+        function cancelEdit() {
+            editing_task_id = null;
 
-            if (newName !== '') {
-                var xhr = new XMLHttpRequest();
-                xhr.open("POST", "/edit_todo/" + todoId, true);
-                xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
-                xhr.onload = function() {
-                    if (xhr.status === 200) {
-                        console.log('Update successful');
-                    } else {
-                        console.log('Update failed: ' + xhr.status);
-                    }
-                };
-                xhr.send("new_text=" + encodeURIComponent(newName));
-            }
+            // Mostrar la vista normal de todas las tareas
+            document.querySelectorAll('.task-display').forEach(function(task) {
+                task.style.display = 'block';
+            });
+
+            // Ocultar los formularios de edición de todas las tareas
+            document.querySelectorAll('.task-edit').forEach(function(task) {
+                task.style.display = 'none';
+            });
         }
     </script>
 </body>
