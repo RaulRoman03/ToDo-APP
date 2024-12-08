@@ -60,7 +60,9 @@ google = oauth.register(
     authorize_url='https://accounts.google.com/o/oauth2/auth',
     access_token_url='https://accounts.google.com/o/oauth2/token',
     api_base_url='https://www.googleapis.com/oauth2/v2/',
-    client_kwargs={'scope': 'openid email profile'}
+    client_kwargs={'scope': 'openid email profile'},
+    # jwks_url agregado para la verificación del JWT
+    jwks_url='https://www.googleapis.com/oauth2/v3/certs'
 )
 
 # ------------- RUTAS PARA REGISTRO Y LOGIN (SQL) -----------------
