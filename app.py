@@ -9,6 +9,7 @@ from flask_bcrypt import Bcrypt
 import MySQLdb.cursors
 from authlib.integrations.flask_client import OAuth
 from dotenv import load_dotenv
+from datetime import timedelta
 
 app = Flask(__name__)
 
@@ -43,8 +44,8 @@ bcrypt = Bcrypt(app)
 
 # Configurar OAuth
 load_dotenv(dotenv_path='variables.env')
-print("GOOGLE_CLIENT_ID:", os.getenv('GOOGLE_CLIENT_ID'))
-print("GOOGLE_CLIENT_SECRET:", os.getenv('GOOGLE_CLIENT_SECRET'))
+print("GOOGLE_CLIENT_ID:", os.getenv('GOOGLE_CLIENT_ID'))  # Output para verificar
+print("GOOGLE_CLIENT_SECRET:", os.getenv('GOOGLE_CLIENT_SECRET'))  # Output para verificar
 app.config['GOOGLE_CLIENT_ID'] = os.getenv('GOOGLE_CLIENT_ID')
 app.config['GOOGLE_CLIENT_SECRET'] = os.getenv('GOOGLE_CLIENT_SECRET')
 app.config['OAUTHLIB_INSECURE_TRANSPORT'] = '1'  # Solo para desarrollo local
@@ -87,6 +88,9 @@ def register():
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
+    if 'loggedin' in session:
+        return redirect(url_for('home'))
+    
     if request.method == 'POST':
         username = request.form['username']
         password_candidate = request.form['password']
@@ -104,6 +108,7 @@ def login():
                 session['username'] = username
                 session['email'] = user['email']
                 flash('Inicio de sesión exitoso.')
+                print(f"Session after login: {session}")  # Output para verificar la sesión
                 return redirect(url_for('home'))
             else:
                 flash('Contraseña incorrecta.')
@@ -155,6 +160,7 @@ def google_callback():
         session['picture'] = user_info.get('picture', '')
 
         flash('Inicio de sesión con Google exitoso.')
+        print(f"Session after Google login: {session}")  # Output para verificar la sesión
         return redirect(url_for('home'))
 
     except Exception as e:
@@ -237,9 +243,8 @@ def edit_todo(todo_id):
             {'id': todo_id},
             {'$set': {'name': encrypted_name, 'priority': new_priority}}
         )
-
     return redirect(url_for("home"))
 
-# ------------- EJECUCIÓN DE LA APLICACIÓN -------------
-if __name__ == "__main__":
-    app.run(debug=False, host="0.0.0.0", port=int(os.getenv("PORT", 5000)))  # Usa PORT desde la variable de entorno si está disponible
+if __name__ == '__main__':
+    app.permanent_session_lifetime = timedelta(days=7)  # Duración de la sesión
+    app.run(debug=True)
