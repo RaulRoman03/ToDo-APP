@@ -254,7 +254,7 @@ def home():
     except Exception as e:
         app.logger.error("Error al cargar tareas desde MongoDB: %s", str(e))
         flash("Error al cargar las tareas.")
-        return render_template("home.html", todos=[])
+        return render_template("login.html", todos=[])
 
 @app.route("/checked/<todo_id>", methods=["POST"])
 def checked_todo(todo_id):
