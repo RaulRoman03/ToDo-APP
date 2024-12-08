@@ -209,56 +209,88 @@ def logout():
     return redirect(url_for('login'))
 
 @app.route("/", methods=["GET", "POST"])
+@app.route("/", methods=["GET", "POST"])
 @app.route("/home", methods=["GET", "POST"])
 def home():
     if 'loggedin' not in session:
         return redirect(url_for('login'))
-
+    
     user_id = session.get('username')
 
     if request.method == "POST":
-        todo_name = validate_todo_data(request.form.get("todo_name", ""))
+        todo_name = request.form.get("todo_name", "").strip()
         priority = request.form.get("priority", "3")
-
         if todo_name:
             try:
                 encrypted_name = cipher_suite.encrypt(todo_name.encode()).decode()
-                cursor, conn = get_postgres_cursor()
-                if cursor:
-                    cursor.execute("""INSERT INTO tasks (user_id, name, checked, priority) 
-                                    VALUES (%s, %s, %s, %s)""",
-                                   (user_id, encrypted_name, False, priority))
-                    conn.commit()
-                    cursor.close()
-                    conn.close()
-                flash('Tarea añadida exitosamente.')
+                todos_collection.insert_one({
+                    'user_id': user_id,
+                    'id': str(uuid.uuid4()),
+                    'name': encrypted_name,
+                    'checked': False,
+                    'priority': priority
+                })
+                flash("Tarea añadida exitosamente.")
             except Exception as e:
-                app.logger.error("Error al agregar tarea: %s", str(e))
-                flash('Error al agregar tarea.')
-
+                app.logger.error("Error al guardar tarea en MongoDB: %s", str(e))
+                flash("Error al guardar la tarea.")
+    
     try:
-        cursor, conn = get_postgres_cursor()
-        if cursor:
-            cursor.execute("SELECT * FROM tasks WHERE user_id = %s", (user_id,))
-            tasks = cursor.fetchall()
-            decrypted_todos = []
-
-            for task in tasks:
-                try:
-                    decrypted_name = cipher_suite.decrypt(task[1].encode()).decode()
-                    decrypted_todos.append({**task, 'name': decrypted_name})
-                except Exception as e:
-                    app.logger.error("Error al descifrar tarea: %s", str(e))
-            
-            cursor.close()
-            conn.close()
-
+        todos = todos_collection.find({'user_id': user_id})
+        decrypted_todos = []
+        for todo in todos:
+            try:
+                decrypted_name = cipher_suite.decrypt(todo['name'].encode()).decode()
+                decrypted_todos.append({
+                    'id': todo['id'],
+                    'name': decrypted_name,
+                    'checked': todo['checked'],
+                    'priority': todo['priority']
+                })
+            except Exception as e:
+                app.logger.error("Error al descifrar tarea: %s", str(e))
+        
         return render_template("home.html", todos=decrypted_todos)
-
     except Exception as e:
-        app.logger.error("Error al cargar tareas: %s", str(e))
-        flash('Error al cargar tareas.')
+        app.logger.error("Error al cargar tareas desde MongoDB: %s", str(e))
+        flash("Error al cargar las tareas.")
         return render_template("home.html", todos=[])
+
+@app.route("/checked/<todo_id>", methods=["POST"])
+def checked_todo(todo_id):
+    todo = todos_collection.find_one({'id': todo_id})
+    if todo:
+        new_checked_state = not todo['checked']
+        todos_collection.update_one(
+            {'id': todo_id},
+            {'$set': {'checked': new_checked_state}}
+        )
+    return redirect(url_for("home"))
+
+@app.route("/delete/<todo_id>", methods=["POST"])
+def delete_todo(todo_id):
+    todos_collection.delete_one({'id': todo_id})
+    return redirect(url_for("home"))
+
+@app.route("/edit_todo/<todo_id>", methods=["POST"])
+def edit_todo(todo_id):
+    new_content = request.form.get('new_text', "").strip()
+    new_priority = request.form.get('priority', "3")
+
+    if new_content:
+        encrypted_name = cipher_suite.encrypt(new_content.encode()).decode()
+
+        result = todos_collection.update_one(
+            {'id': todo_id},
+            {'$set': {'name': encrypted_name, 'priority': new_priority}}
+        )
+
+        if result.modified_count == 0:
+            print("No document was updated. Check the todo_id.")
+    else:
+        print("No new content provided.")
+    
+    return redirect(url_for("home"))
 
 if __name__ == "__main__":
     app.run(debug=True, host='0.0.0.0', port=5000)
