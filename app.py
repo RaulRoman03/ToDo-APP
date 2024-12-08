@@ -142,11 +142,41 @@ def login():
                     return redirect(url_for('home'))
                 else:
                     flash('Credenciales incorrectas.')
+
         except Exception as e:
             app.logger.error("Error al iniciar sesión: %s", str(e))
             flash('Error al iniciar sesión. Por favor, inténtelo nuevamente.')
 
     return render_template('login.html')
+
+@app.route('/login/google')
+def login_google():
+    # Redirigir a Google para iniciar sesión
+    return google.authorize_redirect(redirect_uri=url_for('login_callback', _external=True))
+
+@app.route('/login/callback')
+def login_callback():
+    try:
+        # Obtener el token de Google
+        google_token = google.authorize_access_token()
+
+        # Obtener la información del usuario de Google
+        user_info = google.parse_id_token(google_token)
+
+        # Puedes verificar si el ID del token es válido
+        if user_info:
+            session['loggedin'] = True
+            session['username'] = user_info['name']
+            session['email'] = user_info['email']
+            flash('Inicio de sesión exitoso con Google.')
+            return redirect(url_for('home'))  # Redirige a la página principal
+
+    except Exception as e:
+        app.logger.error("Error en callback de Google: %s", str(e))
+        flash('Hubo un error al iniciar sesión con Google. Inténtalo de nuevo.')
+        return redirect(url_for('login'))  # Redirige a la página de login
+
+    return redirect(url_for('login'))
 
 @app.route('/logout')
 def logout():
@@ -199,4 +229,4 @@ def home():
     return render_template("home.html", todos=decrypted_todos)
 
 if __name__ == "__main__":
-    app.run(debug=False, host="0.0.0.0", port=int(os.getenv("   ", 5000)))
+    app.run(debug=False, host="0.0.0.0", port=int(os.getenv("PORT", 5000)))
