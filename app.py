@@ -8,6 +8,7 @@ from flask_mysqldb import MySQL
 from flask_bcrypt import Bcrypt
 import MySQLdb.cursors
 from authlib.integrations.flask_client import OAuth
+from dotenv import load_dotenv
 
 app = Flask(__name__)
 
@@ -41,6 +42,9 @@ mysql = MySQL(app)
 bcrypt = Bcrypt(app)
 
 # Configurar OAuth
+load_dotenv(dotenv_path='variables.env')
+print("GOOGLE_CLIENT_ID:", os.getenv('GOOGLE_CLIENT_ID'))
+print("GOOGLE_CLIENT_SECRET:", os.getenv('GOOGLE_CLIENT_SECRET'))
 app.config['GOOGLE_CLIENT_ID'] = os.getenv('GOOGLE_CLIENT_ID')
 app.config['GOOGLE_CLIENT_SECRET'] = os.getenv('GOOGLE_CLIENT_SECRET')
 app.config['OAUTHLIB_INSECURE_TRANSPORT'] = '1'  # Solo para desarrollo local
