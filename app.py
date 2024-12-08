@@ -159,7 +159,7 @@ def login():
 def login_google():
     state = str(uuid.uuid4())  # Generar un nuevo valor de estado
     session['oauth_state'] = state  # Guardarlo en la sesión
-    redirect_uri = url_for('login_callback', _external=True)  # Corregido aquí
+    redirect_uri = url_for('login_callback', _external=True)
     return google.authorize_redirect(redirect_uri, state=state)
 
 @app.route('/google/callback')
