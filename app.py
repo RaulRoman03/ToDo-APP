@@ -67,6 +67,8 @@ else:
 cipher_suite = Fernet(key)
 
 # Configuración de OAuth
+print("GOOGLE_CLIENT_ID:", os.getenv('GOOGLE_CLIENT_ID'))
+print("GOOGLE_CLIENT_SECRET:", os.getenv('GOOGLE_CLIENT_SECRET'))
 app.config['GOOGLE_CLIENT_ID'] = os.getenv('GOOGLE_CLIENT_ID')
 app.config['GOOGLE_CLIENT_SECRET'] = os.getenv('GOOGLE_CLIENT_SECRET')
 oauth = OAuth(app)
@@ -217,17 +219,11 @@ def home():
     for todo in todos:
         try:
             decrypted_name = cipher_suite.decrypt(todo['name'].encode()).decode()
-            decrypted_todos.append({
-                'id': todo['id'],
-                'name': decrypted_name,
-                'checked': todo['checked'],
-                'priority': todo['priority']
-            })
-        except Exception:
-            app.logger.error("Error al descifrar tarea.")
-            continue
+            decrypted_todos.append({**todo, 'name': decrypted_name})
+        except Exception as e:
+            app.logger.error("Error al descifrar tarea: %s", str(e))
 
-    return render_template("home.html", todos=decrypted_todos)
+    return render_template('home.html', todos=decrypted_todos)
 
 if __name__ == "__main__":
     app.run(debug=True, host="0.0.0.0", port=int(os.getenv("PORT", 5000)))
