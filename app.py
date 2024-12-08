@@ -156,7 +156,7 @@ def login():
 def login_google():
     state = str(uuid.uuid4())  # Generar un nuevo valor de estado
     session['oauth_state'] = state  # Guardarlo en la sesión
-    redirect_uri = url_for('google_callback', _external=True)
+    redirect_uri = url_for('login_callback', _external=True)  # Corregido aquí
     return google.authorize_redirect(redirect_uri, state=state)
 
 @app.route('/google/callback')
@@ -179,7 +179,7 @@ def login_callback():
         if not user:
             # Crear un nuevo usuario si no existe
             hashed_password = bcrypt.generate_password_hash(str(uuid.uuid4())).decode('utf-8')
-            cursor.execute("""
+            cursor.execute(""" 
                 INSERT INTO users (username, email, firstname, lastname, password) 
                 VALUES (%s, %s, %s, %s, %s)
             """, (user_info['email'], user_info['email'], user_info['given_name'], user_info['family_name'], hashed_password))
