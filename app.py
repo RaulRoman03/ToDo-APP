@@ -239,9 +239,11 @@ def home():
                 'priority': priority
             })
         except cryptography.fernet.InvalidToken:
-            app.logger.warning(f"Error al descifrar el todo con ID: {todo['id']}")
-
+            pass
+    
     return render_template("home.html", todos=decrypted_todos)
 
+
 if __name__ == "__main__":
+    app.run(debug=False, host="0.0.0.0", port=int(os.getenv("PORT", 5000)))
     app.run(debug=True)
