@@ -123,18 +123,23 @@ def google_login():
     state = str(uuid.uuid4())  # Generar un nuevo valor de estado
     session['oauth_state'] = state  # Guardarlo en la sesión
     redirect_uri = url_for('google_callback', _external=True)
+    print(f"Redirigiendo a Google con URI: {redirect_uri}, Estado: {state}")
     return google.authorize_redirect(redirect_uri, state=state)
 
 @app.route('/google/callback')
 def google_callback():
     try:
+        print(f"Recibiendo parámetros de Google: {request.args}")  # Verifica los parámetros recibidos
         # Verificar el estado antes de continuar
         if request.args.get('state') != session.get('oauth_state'):
+            print(f"Error: El estado no coincide. Esperado: {session.get('oauth_state')}, Recibido: {request.args.get('state')}")
             raise Exception("State mismatch error!")
 
         # Continuar con la autenticación de Google
         token = google.authorize_access_token()
         user_info = google.get('userinfo').json()
+
+        print(f"User Info: {user_info}")  # Verifica la información del usuario
 
         # Verificar si el usuario ya existe en la base de datos
         cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
@@ -142,6 +147,7 @@ def google_callback():
         user = cursor.fetchone()
 
         if not user:
+            print(f"Usuario no encontrado, creando uno nuevo.")
             # Crear un nuevo usuario si no existe
             hashed_password = bcrypt.generate_password_hash(str(uuid.uuid4())).decode('utf-8')
             cursor.execute("""INSERT INTO users (username, email, firstname, lastname, password) 
@@ -160,12 +166,14 @@ def google_callback():
         session['picture'] = user_info.get('picture', '')
 
         flash('Inicio de sesión con Google exitoso.')
-        print(f"Session after Google login: {session}")  # Output para verificar la sesión
+        print(f"Session after Google login: {session}")  # Verifica la sesión
         return redirect(url_for('home'))
 
     except Exception as e:
         flash(f"Error durante la autenticación con Google: {e}")
+        print(f"Error durante la autenticación con Google: {e}")
         return redirect(url_for('login'))
+
 
 @app.route('/logout')
 def logout():
