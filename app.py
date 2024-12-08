@@ -1,3 +1,4 @@
+import logging
 from flask import Flask, render_template, url_for, request, redirect, flash, session
 from pymongo import MongoClient
 from cryptography.fernet import Fernet
@@ -12,7 +13,10 @@ from dotenv import load_dotenv
 from datetime import timedelta
 import secrets
 
+# Configuración del logger para ver los logs de depuración
+logging.basicConfig(level=logging.DEBUG)
 app = Flask(__name__)
+app.logger.setLevel(logging.DEBUG)
 
 # Usar FLASK_SECRET_KEY desde la variable de entorno
 app.secret_key = os.getenv("FLASK_SECRET_KEY", "default_secret_key")  # Valor por defecto si no está configurada
@@ -45,8 +49,10 @@ bcrypt = Bcrypt(app)
 
 # Cargar variables de entorno para OAuth
 load_dotenv(dotenv_path='variables.env')
-print("GOOGLE_CLIENT_ID:", os.getenv('GOOGLE_CLIENT_ID'))  # Output para verificar
-print("GOOGLE_CLIENT_SECRET:", os.getenv('GOOGLE_CLIENT_SECRET'))  # Output para verificar
+
+# Verificar que las variables de entorno estén cargando correctamente
+app.logger.debug(f"GOOGLE_CLIENT_ID: {os.getenv('GOOGLE_CLIENT_ID')}")
+app.logger.debug(f"GOOGLE_CLIENT_SECRET: {os.getenv('GOOGLE_CLIENT_SECRET')}")
 
 app.config['GOOGLE_CLIENT_ID'] = os.getenv('GOOGLE_CLIENT_ID')
 app.config['GOOGLE_CLIENT_SECRET'] = os.getenv('GOOGLE_CLIENT_SECRET')
@@ -61,9 +67,10 @@ google = oauth.register(
     access_token_url='https://accounts.google.com/o/oauth2/token',
     api_base_url='https://www.googleapis.com/oauth2/v2/',
     client_kwargs={'scope': 'openid email profile'},
-    # jwks_url agregado para la verificación del JWT
-    jwks_url='https://www.googleapis.com/oauth2/v3/certs'
+    # Usa la URL de descubrimiento de Google
+    server_metadata_url='https://accounts.google.com/.well-known/openid-configuration'
 )
+
 
 # ------------- RUTAS PARA REGISTRO Y LOGIN (SQL) -----------------
 @app.route('/register', methods=['GET', 'POST'])
@@ -112,7 +119,7 @@ def login():
                 session['username'] = username
                 session['email'] = user['email']
                 flash('Inicio de sesión exitoso.')
-                print(f"Session after login: {session}")  # Output para verificar la sesión
+                app.logger.debug(f"Session after login: {session}")  # Output para verificar la sesión
                 return redirect(url_for('home'))
             else:
                 flash('Contraseña incorrecta.')
@@ -127,15 +134,29 @@ def login_google():
     nonce = secrets.token_urlsafe(16)  # Genera un nonce único
     session['nonce'] = nonce  # Guarda el nonce en la sesión
     redirect_uri = url_for('google_callback', _external=True)
-    print(f"Redirigiendo a Google con URI: {redirect_uri}, Estado: {nonce}")
+    app.logger.debug(f"Redirigiendo a Google con URI: {redirect_uri}, Estado: {nonce}")
     return google.authorize_redirect(redirect_uri, nonce=nonce)
 
 @app.route('/google/callback')
 def google_callback():
+    app.logger.debug("Callback de Google recibido.")
     nonce = session.pop('nonce', None)
     try:
         token = google.authorize_access_token()
+        app.logger.debug(f"Token recibido de Google: {token}")
+
         user_info = google.get('userinfo').json()
+        app.logger.debug(f"Información del usuario: {user_info}")
+
+        # Verificar el JWT
+        if nonce and token.get('id_token'):
+            id_token = token['id_token']
+            decoded_token = google.decode_id_token(id_token)
+            app.logger.debug(f"Token decodificado: {decoded_token}")
+
+            # Verifica que el nonce coincide con el que guardaste
+            if decoded_token.get('nonce') != nonce:
+                raise ValueError('El nonce no coincide con el esperado.')
 
         # Verificar si el usuario existe en la base de datos
         cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
@@ -161,12 +182,12 @@ def google_callback():
         session['picture'] = user_info.get('picture', '')
 
         flash('Inicio de sesión con Google exitoso.')
-        print(f"Session after Google login: {session}")  # Verifica la sesión
+        app.logger.debug(f"Sesión después del login: {session}")  # Verifica la sesión
         return redirect(url_for('home'))
 
     except Exception as e:
         flash(f"Error durante la autenticación con Google: {e}")
-        print(f"Error durante la autenticación con Google: {e}")
+        app.logger.error(f"Error durante la autenticación con Google: {e}")
         return redirect(url_for('login'))
 
 @app.route('/logout')
@@ -214,19 +235,10 @@ def home():
                 'priority': priority
             })
         except cryptography.fernet.InvalidToken:
-            print(f"InvalidToken error for todo ID: {todo['id']}")
-    return render_template("index.html", items=decrypted_todos)
+            app.logger.warning(f"No se pudo desencriptar la tarea: {todo['name']}")
+    
+    return render_template("home.html", todos=decrypted_todos)
 
-@app.route("/checked/<todo_id>", methods=["POST"])
-def checked_todo(todo_id):
-    todo = todos_collection.find_one({'id': todo_id})
-    if todo:
-        new_checked_state = not todo['checked']
-        todos_collection.update_one(
-            {'id': todo_id},
-            {'$set': {'checked': new_checked_state}}
-        )
-    return redirect(url_for("home"))
-
+# Configurar y correr la aplicación
 if __name__ == "__main__":
-    app.run(debug=True)
+    app.run(debug=False, host="0.0.0.0", port=int(os.getenv("PORT", 5000)))  # Usa PORT desde la variable de entorno si está disponible
