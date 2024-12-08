@@ -17,7 +17,7 @@ logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %
 load_dotenv(dotenv_path='variables.env')
 
 # Inicializar la app Flask
-app = Flask(__name__)
+app = Flask(__name__, template_folder='templates')
 app.secret_key = os.getenv("FLASK_SECRET_KEY", "default_secret_key")  # Cargar clave secreta desde las variables de entorno
 if app.secret_key == "default_secret_key":
     app.logger.warning("Usando clave secreta predeterminada. Esto no es seguro para producción.")
