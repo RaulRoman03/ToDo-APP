@@ -154,9 +154,13 @@ def google_callback():
             decoded_token = google.decode_id_token(id_token)
             app.logger.debug(f"Token decodificado: {decoded_token}")
 
-            # Verifica que el nonce coincide con el que guardaste
+            # Verifica que el nonce coincida con el que guardaste
             if decoded_token.get('nonce') != nonce:
                 raise ValueError('El nonce no coincide con el esperado.')
+
+            # Verificar el issuer
+            if decoded_token.get('iss') != 'https://accounts.google.com':
+                raise ValueError('El issuer del token no es válido.')
 
         # Verificar si el usuario existe en la base de datos
         cursor = mysql.connection.cursor(MySQLdb.cursors.DictCursor)
@@ -235,10 +239,9 @@ def home():
                 'priority': priority
             })
         except cryptography.fernet.InvalidToken:
-            app.logger.warning(f"No se pudo desencriptar la tarea: {todo['name']}")
-    
+            app.logger.warning(f"Error al descifrar el todo con ID: {todo['id']}")
+
     return render_template("home.html", todos=decrypted_todos)
 
-# Configurar y correr la aplicación
 if __name__ == "__main__":
-    app.run(debug=False, host="0.0.0.0", port=int(os.getenv("PORT", 5000)))  # Usa PORT desde la variable de entorno si está disponible
+    app.run(debug=True)
