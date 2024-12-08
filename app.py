@@ -4,11 +4,12 @@ import uuid
 from flask import Flask, render_template, request, redirect, url_for, flash, session
 from pymongo import MongoClient
 from cryptography.fernet import Fernet
-from flask_mysqldb import MySQL
 from flask_bcrypt import Bcrypt
 from dotenv import load_dotenv
 from authlib.integrations.flask_client import OAuth
 from datetime import timedelta
+import psycopg2
+from psycopg2 import sql
 
 # Configurar logger
 logging.basicConfig(level=logging.DEBUG)
@@ -21,14 +22,28 @@ app = Flask(__name__)
 app.secret_key = os.getenv("FLASK_SECRET_KEY", "default_secret_key")
 app.permanent_session_lifetime = timedelta(minutes=30)
 
-# Configuración de MySQL
-app.config['MYSQL_HOST'] = os.getenv('MYSQL_HOST')
-app.config['MYSQL_USER'] = os.getenv('MYSQL_USER')
-app.config['MYSQL_PASSWORD'] = os.getenv('MYSQL_PASSWORD')
-app.config['MYSQL_DB'] = os.getenv('MYSQL_DB')
-app.config['MYSQL_PORT'] = int(os.getenv('MYSQL_PORT', 3306))
+# Configuración de PostgreSQL
+app.config['POSTGRES_HOST'] = os.getenv('POSTGRES_HOST')
+app.config['POSTGRES_USER'] = os.getenv('POSTGRES_USER')
+app.config['POSTGRES_PASSWORD'] = os.getenv('POSTGRES_PASSWORD')
+app.config['POSTGRES_DB'] = os.getenv('POSTGRES_DB')
+app.config['POSTGRES_PORT'] = int(os.getenv('POSTGRES_PORT', 5432))
 
-mysql = MySQL(app)
+# Conexión a PostgreSQL
+def get_postgres_connection():
+    try:
+        conn = psycopg2.connect(
+            host=app.config['POSTGRES_HOST'],
+            user=app.config['POSTGRES_USER'],
+            password=app.config['POSTGRES_PASSWORD'],
+            dbname=app.config['POSTGRES_DB'],
+            port=app.config['POSTGRES_PORT']
+        )
+        return conn
+    except Exception as e:
+        app.logger.error("Error al conectar a PostgreSQL: %s", str(e))
+        return None
+
 bcrypt = Bcrypt(app)
 
 # Configuración de MongoDB
@@ -66,12 +81,11 @@ google = oauth.register(
 )
 
 # Funciones auxiliares
-def get_mysql_cursor():
-    try:
-        return mysql.connection.cursor()
-    except Exception as e:
-        app.logger.error("Error al obtener cursor MySQL: %s", str(e))
-        return None
+def get_postgres_cursor():
+    conn = get_postgres_connection()
+    if conn:
+        return conn.cursor()
+    return None
 
 def validate_todo_data(todo_name):
     return todo_name.strip() if todo_name else None
@@ -89,12 +103,12 @@ def register():
         hashed_password = bcrypt.generate_password_hash(password).decode('utf-8')
 
         try:
-            cursor = get_mysql_cursor()
+            cursor = get_postgres_cursor()
             if cursor:
                 cursor.execute("""INSERT INTO users (username, email, firstname, lastname, password)
                                   VALUES (%s, %s, %s, %s, %s)""",
                                (username, email, firstname, lastname, hashed_password))
-                mysql.connection.commit()
+                cursor.connection.commit()
                 cursor.close()
                 flash('Usuario registrado exitosamente.')
                 return redirect(url_for('login'))
@@ -114,7 +128,7 @@ def login():
         password_candidate = request.form['password']
 
         try:
-            cursor = get_mysql_cursor()
+            cursor = get_postgres_cursor()
             if cursor:
                 cursor.execute("SELECT * FROM users WHERE username = %s", (username,))
                 user = cursor.fetchone()
@@ -149,7 +163,7 @@ def home():
     user_id = session.get('username')
 
     if request.method == "POST":
-        todo_name = validate_todo_data(request.form.get("todo_name", ""))
+        todo_name = validate_todo_data(request.form.get("todo_name", ""))        
         priority = request.form.get("priority", "3")
 
         if todo_name:
