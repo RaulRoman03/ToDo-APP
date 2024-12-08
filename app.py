@@ -113,17 +113,17 @@ def register():
                 cursor.close()
                 conn.close()
                 flash('Usuario registrado exitosamente.')
-                return redirect(url_for('login'))
+                return redirect(url_for('login.html'))
         except Exception as e:
             app.logger.error("Error al registrar usuario: %s", str(e))
             flash('Error al registrar usuario. Por favor, inténtelo nuevamente.')
 
-    return render_template('register')
+    return render_template('register.html')
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if 'loggedin' in session:
-        return redirect(url_for('home'))
+        return redirect(url_for('index.html'))
 
     if request.method == 'POST':
         username = request.form['username']
@@ -141,7 +141,7 @@ def login():
                     session['username'] = user[1]
                     session['email'] = user[2]
                     flash('Inicio de sesión exitoso.')
-                    return redirect(url_for('index'))
+                    return redirect(url_for('index.html'))
                 else:
                     flash('Credenciales incorrectas.')
 
@@ -149,7 +149,7 @@ def login():
             app.logger.error("Error al iniciar sesión: %s", str(e))
             flash('Error al iniciar sesión. Por favor, inténtelo nuevamente.')
 
-    return render_template('index')
+    return render_template('login.html')
 
 @app.route('/login/google')
 def login_google():
@@ -195,25 +195,27 @@ def login_callback():
         session['picture'] = user_info.get('picture', '')
 
         flash('Inicio de sesión con Google exitoso.')
-        return redirect(url_for('index'))
+        return redirect(url_for('index.html'))
 
     except Exception as e:
         app.logger.error(f"Error durante la autenticación con Google: {e}")
         flash(f"Error durante la autenticación con Google: {e}")
-        return redirect(url_for('login'))
+        return redirect(url_for('login.html'))
 
 @app.route('/logout')
 def logout():
     session.clear()
     flash('Has cerrado sesión.')
-    return redirect(url_for('login'))
+    return redirect(url_for('login.html'))
 
 @app.route("/", methods=["GET", "POST"])
-@app.route("/", methods=["GET", "POST"])
+def index():
+    return redirect(url_for('index.html'))
+
 @app.route("/home", methods=["GET", "POST"])
 def home():
     if 'loggedin' not in session:
-        return redirect(url_for('login'))
+        return redirect(url_for('login.html'))
     
     user_id = session.get('username')
 
@@ -250,11 +252,11 @@ def home():
             except Exception as e:
                 app.logger.error("Error al descifrar tarea: %s", str(e))
         
-        return render_template("index", todos=decrypted_todos)
+        return render_template("index.html", todos=decrypted_todos)
     except Exception as e:
         app.logger.error("Error al cargar tareas desde MongoDB: %s", str(e))
         flash("Error al cargar las tareas.")
-        return render_template("login", todos=[])
+        return render_template("index.html", todos=[])
 
 @app.route("/checked/<todo_id>", methods=["POST"])
 def checked_todo(todo_id):
@@ -265,18 +267,17 @@ def checked_todo(todo_id):
             {'id': todo_id},
             {'$set': {'checked': new_checked_state}}
         )
-    return redirect(url_for("home"))
+    return redirect(url_for("index.html"))
 
 @app.route("/delete/<todo_id>", methods=["POST"])
 def delete_todo(todo_id):
     todos_collection.delete_one({'id': todo_id})
-    return redirect(url_for("index"))
+    return redirect(url_for("index.html"))
 
 @app.route("/edit_todo/<todo_id>", methods=["POST"])
 def edit_todo(todo_id):
     new_content = request.form.get('new_text', "").strip()
     new_priority = request.form.get('priority', "3")
-
     if new_content:
         encrypted_name = cipher_suite.encrypt(new_content.encode()).decode()
 
@@ -290,7 +291,7 @@ def edit_todo(todo_id):
     else:
         print("No new content provided.")
     
-    return redirect(url_for("index"))
+    return redirect(url_for("index.html"))
 
 if __name__ == "__main__":
     app.run(debug=True, host='0.0.0.0', port=5000)
