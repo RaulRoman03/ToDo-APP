@@ -113,7 +113,7 @@ def register():
                 cursor.close()
                 conn.close()
                 flash('Usuario registrado exitosamente.')
-                return redirect(url_for('login.html'))
+                return redirect(url_for('login'))  # Redirige al login después de registrarse
         except Exception as e:
             app.logger.error("Error al registrar usuario: %s", str(e))
             flash('Error al registrar usuario. Por favor, inténtelo nuevamente.')
@@ -123,7 +123,7 @@ def register():
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if 'loggedin' in session:
-        return redirect(url_for('index.html'))
+        return redirect(url_for('home'))  # Redirige a la home si ya está logueado
 
     if request.method == 'POST':
         username = request.form['username']
@@ -141,7 +141,7 @@ def login():
                     session['username'] = user[1]
                     session['email'] = user[2]
                     flash('Inicio de sesión exitoso.')
-                    return redirect(url_for('index.html'))
+                    return redirect(url_for('home'))  # Redirige a la home después de iniciar sesión
                 else:
                     flash('Credenciales incorrectas.')
 
@@ -195,23 +195,24 @@ def login_callback():
         session['picture'] = user_info.get('picture', '')
 
         flash('Inicio de sesión con Google exitoso.')
-        return redirect(url_for('index.html'))
+        return redirect(url_for('home'))  # Redirige a la home después del inicio de sesión
 
     except Exception as e:
         app.logger.error(f"Error durante la autenticación con Google: {e}")
         flash(f"Error durante la autenticación con Google: {e}")
-        return redirect(url_for('login.html'))
+        return redirect(url_for('login'))
 
 @app.route('/logout')
 def logout():
     session.clear()
     flash('Has cerrado sesión.')
-    return redirect(url_for('login.html'))
+    return redirect(url_for('login'))  # Redirige al login después de cerrar sesión
 
 @app.route("/", methods=["GET", "POST"])
-def index():
+@app.route("/home", methods=["GET", "POST"])
+def home():
     if 'loggedin' not in session:
-        return redirect(url_for('login.html'))
+        return redirect(url_for('login'))  # Redirige al login si no está logueado
     
     user_id = session.get('username')
 
@@ -246,48 +247,13 @@ def index():
                     'priority': todo['priority']
                 })
             except Exception as e:
-                app.logger.error("Error al descifrar tarea: %s", str(e))
-        
-        return render_template("index.html", todos=decrypted_todos)
+                app.logger.error("Error al desencriptar tarea: %s", str(e))
+
     except Exception as e:
-        app.logger.error("Error al cargar tareas desde MongoDB: %s", str(e))
-        flash("Error al cargar las tareas.")
-        return render_template("index.html", todos=[])
+        app.logger.error("Error al obtener tareas de MongoDB: %s", str(e))
+        decrypted_todos = []
 
-@app.route("/checked/<todo_id>", methods=["POST"])
-def checked_todo(todo_id):
-    todo = todos_collection.find_one({'id': todo_id})
-    if todo:
-        new_checked_state = not todo['checked']
-        todos_collection.update_one(
-            {'id': todo_id},
-            {'$set': {'checked': new_checked_state}}
-        )
-    return redirect(url_for("index.html"))
-
-@app.route("/delete/<todo_id>", methods=["POST"])
-def delete_todo(todo_id):
-    todos_collection.delete_one({'id': todo_id})
-    return redirect(url_for("index.html"))
-
-@app.route("/edit_todo/<todo_id>", methods=["POST"])
-def edit_todo(todo_id):
-    new_content = request.form.get('new_text', "").strip()
-    new_priority = request.form.get('priority', "3")
-    if new_content:
-        encrypted_name = cipher_suite.encrypt(new_content.encode()).decode()
-
-        result = todos_collection.update_one(
-            {'id': todo_id},
-            {'$set': {'name': encrypted_name, 'priority': new_priority}}
-        )
-
-        if result.modified_count == 0:
-            print("No document was updated. Check the todo_id.")
-    else:
-        print("No new content provided.")
-    
-    return redirect(url_for("index.html"))
+    return render_template("index.html", todos=decrypted_todos)
 
 if __name__ == "__main__":
     app.run(debug=True, host='0.0.0.0', port=5000)
