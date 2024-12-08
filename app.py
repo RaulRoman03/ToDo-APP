@@ -154,32 +154,52 @@ def login():
 
 @app.route('/login/google')
 def login_google():
-    # Redirigir a Google para iniciar sesión
-    return google.authorize_redirect(redirect_uri=url_for('login_callback', _external=True))
+    state = str(uuid.uuid4())  # Generar un nuevo valor de estado
+    session['oauth_state'] = state  # Guardarlo en la sesión
+    redirect_uri = url_for('google_callback', _external=True)
+    return google.authorize_redirect(redirect_uri, state=state)
 
 @app.route('/google/callback')
 def login_callback():
     try:
-        # Obtener el token de Google
-        google_token = google.authorize_access_token()
+        # Verificar el estado antes de continuar
+        if request.args.get('state') != session.get('oauth_state'):
+            raise Exception("State mismatch error!")
 
-        # Obtener la información del usuario de Google
-        user_info = google.parse_id_token(google_token)
+        # Continuar con la autenticación de Google
+        token = google.authorize_access_token()
+        user_info = google.get('userinfo').json()
 
-        # Verificar si el ID del token es válido
-        if user_info:
-            session['loggedin'] = True
-            session['username'] = user_info['name']
-            session['email'] = user_info['email']
-            flash('Inicio de sesión exitoso con Google.')
-            return redirect(url_for('home'))  # Redirige a la página principal
+        # Verificar si el usuario ya existe en la base de datos
+        connection = get_postgres_connection()
+        cursor = connection.cursor()
+        cursor.execute("SELECT * FROM users WHERE email = %s", [user_info['email']])
+        user = cursor.fetchone()
+
+        if not user:
+            # Crear un nuevo usuario si no existe
+            hashed_password = bcrypt.generate_password_hash(str(uuid.uuid4())).decode('utf-8')
+            cursor.execute("""
+                INSERT INTO users (username, email, firstname, lastname, password) 
+                VALUES (%s, %s, %s, %s, %s)
+            """, (user_info['email'], user_info['email'], user_info['given_name'], user_info['family_name'], hashed_password))
+            mysql.connection.commit()
+
+        cursor.close()
+
+        # Iniciar sesión y almacenar información en la sesión
+        session['loggedin'] = True
+        session['username'] = user_info['email']
+        session['email'] = user_info['email']
+        session['name'] = user_info['name']
+        session['picture'] = user_info.get('picture', '')
+
+        flash('Inicio de sesión con Google exitoso.')
+        return redirect(url_for('home'))
 
     except Exception as e:
-        app.logger.error("Error en callback de Google: %s", str(e))
-        flash('Hubo un error al iniciar sesión con Google. Inténtalo de nuevo.')
-        return redirect(url_for('login'))  # Redirige a la página de login
-
-    return redirect(url_for('login'))
+        flash(f"Error durante la autenticación con Google: {e}")
+        return redirect(url_for('login'))
 
 @app.route('/logout')
 def logout():
