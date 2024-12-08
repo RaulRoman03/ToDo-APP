@@ -9,36 +9,37 @@ from flask_bcrypt import Bcrypt
 from dotenv import load_dotenv
 from authlib.integrations.flask_client import OAuth
 from datetime import timedelta
-import secrets
 
-# Cargar variables de entorno desde variables.env
+# Configurar logger
+logging.basicConfig(level=logging.DEBUG)
+
+# Cargar variables de entorno
 load_dotenv(dotenv_path='variables.env')
 
-# Configuración del logger para ver los logs de depuración
-logging.basicConfig(level=logging.DEBUG)
+# Inicializar la app Flask
 app = Flask(__name__)
-app.logger.setLevel(logging.DEBUG)
-
-# Configuración del secret key
 app.secret_key = os.getenv("FLASK_SECRET_KEY", "default_secret_key")
+app.permanent_session_lifetime = timedelta(minutes=30)
 
-# Configuración de MySQL (para registro y login)
+# Configuración de MySQL
 app.config['MYSQL_HOST'] = os.getenv('MYSQL_HOST')
 app.config['MYSQL_USER'] = os.getenv('MYSQL_USER')
 app.config['MYSQL_PASSWORD'] = os.getenv('MYSQL_PASSWORD')
 app.config['MYSQL_DB'] = os.getenv('MYSQL_DB')
 app.config['MYSQL_PORT'] = int(os.getenv('MYSQL_PORT', 3306))
 
-# Inicializando MySQL y Bcrypt
 mysql = MySQL(app)
 bcrypt = Bcrypt(app)
 
-# Configuración de MongoDB (para la lista de tareas)
-client = MongoClient(os.getenv('MONGO_URI', 'mongodb://localhost:27017/'))
-db = client['Users_Tasks']
-todos_collection = db['Tasks']
+# Configuración de MongoDB
+try:
+    client = MongoClient(os.getenv('MONGO_URI', 'mongodb://localhost:27017/'))
+    db = client['Users_Tasks']
+    todos_collection = db['Tasks']
+except Exception as e:
+    app.logger.error("Error al conectar a MongoDB: %s", str(e))
 
-# Cargar o generar clave para cifrado
+# Cargar clave para cifrado
 key_path = "secret.key"
 if os.path.exists(key_path):
     with open(key_path, "rb") as key_file:
@@ -49,12 +50,10 @@ else:
         key_file.write(key)
 cipher_suite = Fernet(key)
 
-# Configuración de OAuth con Google
+# Configuración de OAuth
 app.config['GOOGLE_CLIENT_ID'] = os.getenv('GOOGLE_CLIENT_ID')
 app.config['GOOGLE_CLIENT_SECRET'] = os.getenv('GOOGLE_CLIENT_SECRET')
-app.config['OAUTHLIB_INSECURE_TRANSPORT'] = '1'  # Solo para desarrollo local
 oauth = OAuth(app)
-
 google = oauth.register(
     name='google',
     client_id=app.config['GOOGLE_CLIENT_ID'],
@@ -66,7 +65,18 @@ google = oauth.register(
     server_metadata_url='https://accounts.google.com/.well-known/openid-configuration'
 )
 
-# ------------- Rutas para registro y login (SQL) -----------------
+# Funciones auxiliares
+def get_mysql_cursor():
+    try:
+        return mysql.connection.cursor()
+    except Exception as e:
+        app.logger.error("Error al obtener cursor MySQL: %s", str(e))
+        return None
+
+def validate_todo_data(todo_name):
+    return todo_name.strip() if todo_name else None
+
+# Rutas
 @app.route('/register', methods=['GET', 'POST'])
 def register():
     if request.method == 'POST':
@@ -76,22 +86,23 @@ def register():
         username = request.form['username']
         password = request.form['password']
 
-        # Cifrar la contraseña
         hashed_password = bcrypt.generate_password_hash(password).decode('utf-8')
 
-        # Guardar usuario en la base de datos SQL
-        cursor = mysql.connection.cursor()
-        cursor.execute("""INSERT INTO users (username, email, firstname, lastname, password) 
-                          VALUES (%s, %s, %s, %s, %s)""",
-                       (username, email, firstname, lastname, hashed_password))
-        mysql.connection.commit()
-        cursor.close()
-
-        flash('Usuario registrado exitosamente.')
-        return redirect(url_for('login'))
+        try:
+            cursor = get_mysql_cursor()
+            if cursor:
+                cursor.execute("""INSERT INTO users (username, email, firstname, lastname, password)
+                                  VALUES (%s, %s, %s, %s, %s)""",
+                               (username, email, firstname, lastname, hashed_password))
+                mysql.connection.commit()
+                cursor.close()
+                flash('Usuario registrado exitosamente.')
+                return redirect(url_for('login'))
+        except Exception as e:
+            app.logger.error("Error al registrar usuario: %s", str(e))
+            flash('Error al registrar usuario. Por favor, inténtelo nuevamente.')
 
     return render_template('register.html')
-
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
@@ -102,27 +113,26 @@ def login():
         username = request.form['username']
         password_candidate = request.form['password']
 
-        # Verificar si el usuario existe en la base de datos SQL
-        cursor = mysql.connection.cursor()
-        cursor.execute("SELECT * FROM users WHERE username = %s", (username,))
-        user = cursor.fetchone()
-        cursor.close()
+        try:
+            cursor = get_mysql_cursor()
+            if cursor:
+                cursor.execute("SELECT * FROM users WHERE username = %s", (username,))
+                user = cursor.fetchone()
+                cursor.close()
 
-        if user:
-            # Verificar la contraseña
-            if bcrypt.check_password_hash(user[4], password_candidate):
-                session['loggedin'] = True
-                session['username'] = user[1]
-                session['email'] = user[2]
-                flash('Inicio de sesión exitoso.')
-                return redirect(url_for('home'))
-            else:
-                flash('Contraseña incorrecta.')
-        else:
-            flash('Usuario no encontrado.')
+                if user and bcrypt.check_password_hash(user[4], password_candidate):
+                    session['loggedin'] = True
+                    session['username'] = user[1]
+                    session['email'] = user[2]
+                    flash('Inicio de sesión exitoso.')
+                    return redirect(url_for('home'))
+                else:
+                    flash('Credenciales incorrectas.')
+        except Exception as e:
+            app.logger.error("Error al iniciar sesión: %s", str(e))
+            flash('Error al iniciar sesión. Por favor, inténtelo nuevamente.')
 
     return render_template('login.html')
-
 
 @app.route('/logout')
 def logout():
@@ -130,8 +140,6 @@ def logout():
     flash('Has cerrado sesión.')
     return redirect(url_for('login'))
 
-
-# ------------- Rutas para la lista de tareas (MongoDB) -----------------
 @app.route("/", methods=["GET", "POST"])
 @app.route("/home", methods=["GET", "POST"])
 def home():
@@ -141,17 +149,23 @@ def home():
     user_id = session.get('username')
 
     if request.method == "POST":
-        todo_name = request.form.get("todo_name", "").strip()
+        todo_name = validate_todo_data(request.form.get("todo_name", ""))
         priority = request.form.get("priority", "3")
+
         if todo_name:
-            encrypted_name = cipher_suite.encrypt(todo_name.encode()).decode()
-            todos_collection.insert_one({
-                'user_id': user_id,
-                'id': str(uuid.uuid4()),
-                'name': encrypted_name,
-                'checked': False,
-                'priority': priority
-            })
+            try:
+                encrypted_name = cipher_suite.encrypt(todo_name.encode()).decode()
+                todos_collection.insert_one({
+                    'user_id': user_id,
+                    'id': str(uuid.uuid4()),
+                    'name': encrypted_name,
+                    'checked': False,
+                    'priority': priority
+                })
+                flash('Tarea añadida exitosamente.')
+            except Exception as e:
+                app.logger.error("Error al agregar tarea: %s", str(e))
+                flash('Error al agregar tarea.')
 
     todos = todos_collection.find({'user_id': user_id})
     decrypted_todos = []
@@ -165,10 +179,10 @@ def home():
                 'priority': todo['priority']
             })
         except Exception:
-            pass
+            app.logger.error("Error al descifrar tarea.")
+            continue
 
     return render_template("home.html", todos=decrypted_todos)
-
 
 if __name__ == "__main__":
     app.run(debug=False, host="0.0.0.0", port=int(os.getenv("PORT", 5000)))
