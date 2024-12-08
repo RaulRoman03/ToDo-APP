@@ -155,7 +155,7 @@ def login_google():
     # Redirigir a Google para iniciar sesión
     return google.authorize_redirect(redirect_uri=url_for('login_callback', _external=True))
 
-@app.route('/login/callback')
+@app.route('/google/callback')
 def login_callback():
     try:
         # Obtener el token de Google
@@ -164,7 +164,7 @@ def login_callback():
         # Obtener la información del usuario de Google
         user_info = google.parse_id_token(google_token)
 
-        # Puedes verificar si el ID del token es válido
+        # Verificar si el ID del token es válido
         if user_info:
             session['loggedin'] = True
             session['username'] = user_info['name']
