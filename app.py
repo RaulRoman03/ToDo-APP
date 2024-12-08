@@ -12,7 +12,7 @@ import psycopg2
 from psycopg2 import sql
 
 # Configurar logger
-logging.basicConfig(level=logging.DEBUG)
+logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
 
 # Cargar variables de entorno
 load_dotenv(dotenv_path='variables.env')
@@ -170,8 +170,13 @@ def login_callback():
             raise Exception("State mismatch error!")
 
         # Continuar con la autenticación de Google
-        token = google.authorize_access_token()
-        user_info = google.get('userinfo').json()
+        token = google.authorize_access_token()  # Obtener el token de acceso
+
+        # Guardar el token en la sesión
+        session['google_token'] = token  # Almacenar el token de acceso en la sesión
+
+        # Usar el token de acceso para obtener la información del usuario
+        user_info = google.get('userinfo').json()  # Hacer una solicitud a la API de Google para obtener info del usuario
 
         # Verificar si el usuario ya existe en la base de datos
         connection = get_postgres_connection()
@@ -201,6 +206,7 @@ def login_callback():
         return redirect(url_for('home'))
 
     except Exception as e:
+        app.logger.error(f"Error durante la autenticación con Google: {e}")
         flash(f"Error durante la autenticación con Google: {e}")
         return redirect(url_for('login'))
 
