@@ -113,7 +113,7 @@ def register():
                 cursor.close()
                 conn.close()
                 flash('Usuario registrado exitosamente.')
-                return redirect(url_for('login'))
+                return redirect(url_for('login.html'))
         except Exception as e:
             app.logger.error("Error al registrar usuario: %s", str(e))
             flash('Error al registrar usuario. Por favor, inténtelo nuevamente.')
@@ -141,7 +141,7 @@ def login():
                     session['username'] = user[1]
                     session['email'] = user[2]
                     flash('Inicio de sesión exitoso.')
-                    return redirect(url_for('home'))
+                    return redirect(url_for('index.html'))
                 else:
                     flash('Credenciales incorrectas.')
 
@@ -195,12 +195,12 @@ def login_callback():
         session['picture'] = user_info.get('picture', '')
 
         flash('Inicio de sesión con Google exitoso.')
-        return redirect(url_for('home'))
+        return redirect(url_for('index.html'))
 
     except Exception as e:
         app.logger.error(f"Error durante la autenticación con Google: {e}")
         flash(f"Error durante la autenticación con Google: {e}")
-        return redirect(url_for('login'))
+        return redirect(url_for('login.html'))
 
 @app.route('/logout')
 def logout():
@@ -213,7 +213,7 @@ def logout():
 @app.route("/home", methods=["GET", "POST"])
 def home():
     if 'loggedin' not in session:
-        return redirect(url_for('login'))
+        return redirect(url_for('login.html'))
     
     user_id = session.get('username')
 
@@ -250,7 +250,7 @@ def home():
             except Exception as e:
                 app.logger.error("Error al descifrar tarea: %s", str(e))
         
-        return render_template("home.html", todos=decrypted_todos)
+        return render_template("index.html", todos=decrypted_todos)
     except Exception as e:
         app.logger.error("Error al cargar tareas desde MongoDB: %s", str(e))
         flash("Error al cargar las tareas.")
@@ -270,7 +270,7 @@ def checked_todo(todo_id):
 @app.route("/delete/<todo_id>", methods=["POST"])
 def delete_todo(todo_id):
     todos_collection.delete_one({'id': todo_id})
-    return redirect(url_for("home"))
+    return redirect(url_for("index.html"))
 
 @app.route("/edit_todo/<todo_id>", methods=["POST"])
 def edit_todo(todo_id):
@@ -290,7 +290,7 @@ def edit_todo(todo_id):
     else:
         print("No new content provided.")
     
-    return redirect(url_for("home"))
+    return redirect(url_for("index.html"))
 
 if __name__ == "__main__":
     app.run(debug=True, host='0.0.0.0', port=5000)
