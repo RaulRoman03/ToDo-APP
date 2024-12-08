@@ -55,9 +55,9 @@ google = oauth.register(
     name='google',
     client_id=app.config['GOOGLE_CLIENT_ID'],
     client_secret=app.config['GOOGLE_CLIENT_SECRET'],
-    access_token_url='https://accounts.google.com/o/oauth2/token',
     authorize_url='https://accounts.google.com/o/oauth2/auth',
-    api_base_url='https://www.googleapis.com/oauth2/v1/',
+    access_token_url='https://accounts.google.com/o/oauth2/token',
+    api_base_url='https://www.googleapis.com/oauth2/v2/',
     client_kwargs={'scope': 'openid email profile'}
 )
 
@@ -234,25 +234,5 @@ def checked_todo(todo_id):
         )
     return redirect(url_for("home"))
 
-@app.route("/delete/<todo_id>", methods=["POST"])
-def delete_todo(todo_id):
-    todos_collection.delete_one({'id': todo_id})
-    return redirect(url_for("home"))
-
-@app.route("/edit_todo/<todo_id>", methods=["POST"])
-def edit_todo(todo_id):
-    new_content = request.form.get('new_text', "").strip()
-    new_priority = request.form.get('priority', "3")
-
-    if new_content:
-        encrypted_name = cipher_suite.encrypt(new_content.encode()).decode()
-
-        result = todos_collection.update_one(
-            {'id': todo_id},
-            {'$set': {'name': encrypted_name, 'priority': new_priority}}
-        )
-    return redirect(url_for("home"))
-
-if __name__ == '__main__':
-    app.permanent_session_lifetime = timedelta(days=7)  # Duración de la sesión
+if __name__ == "__main__":
     app.run(debug=True)
