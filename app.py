@@ -19,7 +19,7 @@ load_dotenv(dotenv_path='variables.env')
 
 # Inicializar la app Flask
 app = Flask(__name__)
-app.secret_key = os.getenv("FLASK_SECRET_KEY", "default_secret_key")
+app.secret_key = os.getenv("FLASK_SECRET_KEY", "default_secret_key")  # Cargar clave secreta desde las variables de entorno
 app.permanent_session_lifetime = timedelta(minutes=30)
 
 # Configuración de PostgreSQL
