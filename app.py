@@ -149,7 +149,7 @@ def login():
             app.logger.error("Error al iniciar sesión: %s", str(e))
             flash('Error al iniciar sesión. Por favor, inténtelo nuevamente.')
 
-    return render_template('login')
+    return render_template('index')
 
 @app.route('/login/google')
 def login_google():
