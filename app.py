@@ -8,17 +8,18 @@ from flask_mysqldb import MySQL
 from flask_bcrypt import Bcrypt
 import MySQLdb.cursors
 from authlib.integrations.flask_client import OAuth
-from dotenv import load_dotenv
 
 app = Flask(__name__)
-app.secret_key = os.getenv("FLASK_SECRET_KEY", "default_secret_key")
+
+# Usar FLASK_SECRET_KEY desde la variable de entorno
+app.secret_key = os.getenv("FLASK_SECRET_KEY", "default_secret_key")  # Valor por defecto si no está configurada
 
 # MongoDB connection (para la lista de tareas)
 client = MongoClient('mongodb://localhost:27017/')
 db = client['Users_Tasks']
 todos_collection = db['Tasks']
 
-# Load or generate a key for encryption and decryption (para cifrar tareas y datos de usuarios)
+# Cargar o generar una clave para cifrado (para tareas y datos de usuarios)
 key_path = "secret.key"
 if os.path.exists(key_path):
     with open(key_path, "rb") as key_file:
@@ -40,13 +41,9 @@ mysql = MySQL(app)
 bcrypt = Bcrypt(app)
 
 # Configurar OAuth
-load_dotenv(dotenv_path='C:/Users/raulr/OneDrive/Escritorio/TODO-LIST/variables.env')
-print("GOOGLE_CLIENT_ID:", os.getenv('GOOGLE_CLIENT_ID'))
-print("GOOGLE_CLIENT_SECRET:", os.getenv('GOOGLE_CLIENT_SECRET'))
 app.config['GOOGLE_CLIENT_ID'] = os.getenv('GOOGLE_CLIENT_ID')
 app.config['GOOGLE_CLIENT_SECRET'] = os.getenv('GOOGLE_CLIENT_SECRET')
 app.config['OAUTHLIB_INSECURE_TRANSPORT'] = '1'  # Solo para desarrollo local
-app.secret_key = os.getenv("FLASK_SECRET_KEY", "default_secret_key")
 oauth = OAuth(app)
 
 google = oauth.register(
@@ -74,10 +71,8 @@ def register():
 
         # Guardar usuario en la base de datos SQL
         cursor = mysql.connection.cursor()
-        cursor.execute("""
-            INSERT INTO users (username, email, firstname, lastname, password) 
-            VALUES (%s, %s, %s, %s, %s)
-        """, (username, email, firstname, lastname, hashed_password))
+        cursor.execute("""INSERT INTO users (username, email, firstname, lastname, password) 
+                          VALUES (%s, %s, %s, %s, %s)""", (username, email, firstname, lastname, hashed_password))
         mysql.connection.commit()
         cursor.close()
 
@@ -85,7 +80,6 @@ def register():
         return redirect(url_for('login'))
     
     return render_template('register.html')
-
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
@@ -141,10 +135,10 @@ def google_callback():
         if not user:
             # Crear un nuevo usuario si no existe
             hashed_password = bcrypt.generate_password_hash(str(uuid.uuid4())).decode('utf-8')
-            cursor.execute("""
-                INSERT INTO users (username, email, firstname, lastname, password) 
-                VALUES (%s, %s, %s, %s, %s)
-            """, (user_info['email'], user_info['email'], user_info['given_name'], user_info['family_name'], hashed_password))
+            cursor.execute("""INSERT INTO users (username, email, firstname, lastname, password) 
+                              VALUES (%s, %s, %s, %s, %s)""",
+                           (user_info['email'], user_info['email'], user_info['given_name'],
+                            user_info['family_name'], hashed_password))
             mysql.connection.commit()
 
         cursor.close()
@@ -240,13 +234,8 @@ def edit_todo(todo_id):
             {'$set': {'name': encrypted_name, 'priority': new_priority}}
         )
 
-        if result.modified_count == 0:
-            print("No document was updated. Check the todo_id.")
-    else:
-        print("No new content provided.")
-    
     return redirect(url_for("home"))
 
-# Ejecutar la aplicación
-if __name__ == "__main__":  
-    app.run(debug=True, host="0.0.0.0", port=os.getenv("PORT", default=5000))
+# ------------- EJECUCIÓN DE LA APLICACIÓN -------------
+if __name__ == "__main__":
+    app.run(debug=False, host="0.0.0.0", port=int(os.getenv("PORT", 5000)))  # Usa PORT desde la variable de entorno si está disponible
