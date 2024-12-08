@@ -3,7 +3,7 @@ name: Deploy to Render
 on:
   push:
     branches:
-      - main  # O la rama que prefieras
+      - main
 
 jobs:
   deploy:
@@ -16,7 +16,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
-          python-version: '3.x'  # Cambia la versión según tu requerimiento
+          python-version: '3.12.1'
 
       - name: Install dependencies
         run: |
