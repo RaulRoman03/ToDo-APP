@@ -75,20 +75,19 @@ else:
 cipher_suite = Fernet(key)
 
 # Configuración de OAuth
-print("GOOGLE_CLIENT_ID:", os.getenv('GOOGLE_CLIENT_ID'))
-print("GOOGLE_CLIENT_SECRET:", os.getenv('GOOGLE_CLIENT_SECRET'))
-app.config['GOOGLE_CLIENT_ID'] = os.getenv('GOOGLE_CLIENT_ID')
-app.config['GOOGLE_CLIENT_SECRET'] = os.getenv('GOOGLE_CLIENT_SECRET')
+GOOGLE_CLIENT_ID = os.getenv('GOOGLE_CLIENT_ID')
+GOOGLE_CLIENT_SECRET = os.getenv('GOOGLE_CLIENT_SECRET')
+GOOGLE_DISCOVERY_URL = os.getenv('GOOGLE_DISCOVERY_URL')
+GOOGLE_SCOPES = os.getenv('GOOGLE_SCOPES', 'openid profile email')
 oauth = OAuth(app)
 google = oauth.register(
     name='google',
-    client_id=app.config['GOOGLE_CLIENT_ID'],
-    client_secret=app.config['GOOGLE_CLIENT_SECRET'],
-    authorize_url='https://accounts.google.com/o/oauth2/auth',
-    access_token_url='https://accounts.google.com/o/oauth2/token',
-    api_base_url='https://www.googleapis.com/oauth2/v2/',
-    client_kwargs={'scope': 'openid email profile'},
-    server_metadata_url='https://accounts.google.com/.well-known/openid-configuration'
+    client_id=GOOGLE_CLIENT_ID,
+    client_secret=GOOGLE_CLIENT_SECRET,
+    server_metadata_url=GOOGLE_DISCOVERY_URL,
+    client_kwargs={
+        'scope': GOOGLE_SCOPES  # Usar el scope definido previamente
+    }
 )
 
 # Funciones auxiliares
