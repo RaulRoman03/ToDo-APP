@@ -44,6 +44,7 @@ def get_postgres_connection():
         app.logger.error("Error al conectar a PostgreSQL: %s", str(e))
         return None
 
+# Inicializar bcrypt
 bcrypt = Bcrypt(app)
 
 # Configuración de MongoDB
