@@ -20,6 +20,8 @@ load_dotenv(dotenv_path='variables.env')
 # Inicializar la app Flask
 app = Flask(__name__)
 app.secret_key = os.getenv("FLASK_SECRET_KEY", "default_secret_key")  # Cargar clave secreta desde las variables de entorno
+if app.secret_key == "default_secret_key":
+    app.logger.warning("Usando clave secreta predeterminada. Esto no es seguro para producción.")
 app.permanent_session_lifetime = timedelta(minutes=30)
 
 # Configuración de PostgreSQL
@@ -43,6 +45,12 @@ def get_postgres_connection():
     except Exception as e:
         app.logger.error("Error al conectar a PostgreSQL: %s", str(e))
         return None
+
+def get_postgres_cursor():
+    conn = get_postgres_connection()
+    if conn:
+        return conn.cursor(), conn  # Devolver también la conexión para usar 'with'
+    return None, None
 
 # Inicializar bcrypt
 bcrypt = Bcrypt(app)
@@ -84,12 +92,6 @@ google = oauth.register(
 )
 
 # Funciones auxiliares
-def get_postgres_cursor():
-    conn = get_postgres_connection()
-    if conn:
-        return conn.cursor()
-    return None
-
 def validate_todo_data(todo_name):
     return todo_name.strip() if todo_name else None
 
@@ -106,13 +108,14 @@ def register():
         hashed_password = bcrypt.generate_password_hash(password).decode('utf-8')
 
         try:
-            cursor = get_postgres_cursor()
+            cursor, conn = get_postgres_cursor()
             if cursor:
                 cursor.execute("""INSERT INTO users (username, email, firstname, lastname, password)
                                   VALUES (%s, %s, %s, %s, %s)""",
                                (username, email, firstname, lastname, hashed_password))
-                cursor.connection.commit()
+                conn.commit()  # Asegúrate de hacer commit desde la conexión
                 cursor.close()
+                conn.close()  # Cerrar la conexión explícitamente
                 flash('Usuario registrado exitosamente.')
                 return redirect(url_for('login'))
         except Exception as e:
@@ -131,7 +134,7 @@ def login():
         password_candidate = request.form['password']
 
         try:
-            cursor = get_postgres_cursor()
+            cursor, conn = get_postgres_cursor()
             if cursor:
                 cursor.execute("SELECT * FROM users WHERE username = %s", (username,))
                 user = cursor.fetchone()
@@ -222,28 +225,44 @@ def home():
         if todo_name:
             try:
                 encrypted_name = cipher_suite.encrypt(todo_name.encode()).decode()
-                todos_collection.insert_one({
-                    'user_id': user_id,
-                    'id': str(uuid.uuid4()),
-                    'name': encrypted_name,
-                    'checked': False,
-                    'priority': priority
-                })
+                
+                # Insertar la tarea en PostgreSQL
+                cursor, conn = get_postgres_cursor()
+                if cursor:
+                    cursor.execute("""INSERT INTO tasks (user_id, name, checked, priority) 
+                                    VALUES (%s, %s, %s, %s)""",
+                                   (user_id, encrypted_name, False, priority))
+                    conn.commit()
+                    cursor.close()
+                    conn.close()
+                
                 flash('Tarea añadida exitosamente.')
             except Exception as e:
                 app.logger.error("Error al agregar tarea: %s", str(e))
                 flash('Error al agregar tarea.')
 
-    todos = todos_collection.find({'user_id': user_id})
-    decrypted_todos = []
-    for todo in todos:
-        try:
-            decrypted_name = cipher_suite.decrypt(todo['name'].encode()).decode()
-            decrypted_todos.append({**todo, 'name': decrypted_name})
-        except Exception as e:
-            app.logger.error("Error al descifrar tarea: %s", str(e))
+    # Consultar las tareas desde PostgreSQL
+    try:
+        cursor, conn = get_postgres_cursor()
+        if cursor:
+            cursor.execute("SELECT * FROM tasks WHERE user_id = %s", (user_id,))
+            tasks = cursor.fetchall()
+            decrypted_todos = []
 
-    return render_template('home.html', todos=decrypted_todos)
+            for task in tasks:
+                try:
+                    decrypted_name = cipher_suite.decrypt(task[1].encode()).decode()  # Asegúrate de que 'task[1]' es el nombre cifrado
+                    decrypted_todos.append({**task, 'name': decrypted_name})
+                except Exception as e:
+                    app.logger.error("Error al descifrar tarea: %s", str(e))
+            
+            cursor.close()
+            conn.close()
+
+        return render_template('home.html', todos=decrypted_todos)
+    except Exception as e:
+        app.logger.error("Error al obtener tareas: %s", str(e))
+        return render_template('home.html', todos=[])
 
 if __name__ == "__main__":
     app.run(debug=True, host="0.0.0.0", port=int(os.getenv("PORT", 5000)))
