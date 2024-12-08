@@ -9,7 +9,6 @@ from dotenv import load_dotenv
 from authlib.integrations.flask_client import OAuth
 from datetime import timedelta
 import psycopg2
-from psycopg2 import sql
 
 # Configurar logger
 logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -75,9 +74,6 @@ else:
 cipher_suite = Fernet(key)
 
 # Configuración de OAuth
-app.logger.debug(f"GOOGLE_CLIENT_ID: {os.getenv('GOOGLE_CLIENT_ID')}")
-app.logger.debug(f"GOOGLE_CLIENT_SECRET: {os.getenv('GOOGLE_CLIENT_SECRET')}")
-
 GOOGLE_CLIENT_ID = os.getenv('GOOGLE_CLIENT_ID')
 GOOGLE_CLIENT_SECRET = os.getenv('GOOGLE_CLIENT_SECRET')
 GOOGLE_DISCOVERY_URL = os.getenv('GOOGLE_DISCOVERY_URL')
@@ -88,9 +84,7 @@ google = oauth.register(
     client_id=GOOGLE_CLIENT_ID,
     client_secret=GOOGLE_CLIENT_SECRET,
     server_metadata_url=GOOGLE_DISCOVERY_URL,
-    client_kwargs={
-        'scope': GOOGLE_SCOPES  # Usar el scope definido previamente
-    }
+    client_kwargs={'scope': GOOGLE_SCOPES}
 )
 
 # Funciones auxiliares
@@ -115,9 +109,9 @@ def register():
                 cursor.execute("""INSERT INTO users (username, email, firstname, lastname, password)
                                   VALUES (%s, %s, %s, %s, %s)""",
                                (username, email, firstname, lastname, hashed_password))
-                conn.commit()  # Asegúrate de hacer commit desde la conexión
+                conn.commit()
                 cursor.close()
-                conn.close()  # Cerrar la conexión explícitamente
+                conn.close()
                 flash('Usuario registrado exitosamente.')
                 return redirect(url_for('login'))
         except Exception as e:
@@ -159,35 +153,32 @@ def login():
 
 @app.route('/login/google')
 def login_google():
-    state = str(uuid.uuid4())  # Generar un nuevo valor de estado
-    session['oauth_state'] = state  # Guardarlo en la sesión
+    state = str(uuid.uuid4())
+    session['oauth_state'] = state
     redirect_uri = url_for('login_callback', _external=True)
     return google.authorize_redirect(redirect_uri, state=state)
 
 @app.route('/google/callback')
 def login_callback():
     try:
-        # Verificar el estado antes de continuar
         if request.args.get('state') != session.get('oauth_state'):
             raise Exception("State mismatch error!")
 
-        # Continuar con la autenticación de Google
-        token = google.authorize_access_token()  # Obtener el token de acceso
+        token = google.authorize_access_token()
 
-        # Guardar el token en la sesión
-        session['google_token'] = token  # Almacenar el token de acceso en la sesión
+        session['google_token'] = token
 
-        # Usar el token de acceso para obtener la información del usuario
-        user_info = google.get('userinfo').json()  # Hacer una solicitud a la API de Google para obtener info del usuario
+        user_info_response = google.get('https://www.googleapis.com/oauth2/v1/userinfo')
+        if user_info_response.status_code != 200:
+            raise Exception("Error al obtener información del usuario desde Google.")
+        user_info = user_info_response.json()
 
-        # Verificar si el usuario ya existe en la base de datos
         connection = get_postgres_connection()
         cursor = connection.cursor()
         cursor.execute("SELECT * FROM users WHERE email = %s", [user_info['email']])
         user = cursor.fetchone()
 
         if not user:
-            # Crear un nuevo usuario si no existe
             hashed_password = bcrypt.generate_password_hash(str(uuid.uuid4())).decode('utf-8')
             cursor.execute(""" 
                 INSERT INTO users (username, email, firstname, lastname, password) 
@@ -197,7 +188,6 @@ def login_callback():
 
         cursor.close()
 
-        # Iniciar sesión y almacenar información en la sesión
         session['loggedin'] = True
         session['username'] = user_info['email']
         session['email'] = user_info['email']
@@ -227,14 +217,12 @@ def home():
     user_id = session.get('username')
 
     if request.method == "POST":
-        todo_name = validate_todo_data(request.form.get("todo_name", ""))        
+        todo_name = validate_todo_data(request.form.get("todo_name", ""))
         priority = request.form.get("priority", "3")
 
         if todo_name:
             try:
                 encrypted_name = cipher_suite.encrypt(todo_name.encode()).decode()
-                
-                # Insertar la tarea en PostgreSQL
                 cursor, conn = get_postgres_cursor()
                 if cursor:
                     cursor.execute("""INSERT INTO tasks (user_id, name, checked, priority) 
@@ -243,13 +231,11 @@ def home():
                     conn.commit()
                     cursor.close()
                     conn.close()
-                
                 flash('Tarea añadida exitosamente.')
             except Exception as e:
                 app.logger.error("Error al agregar tarea: %s", str(e))
                 flash('Error al agregar tarea.')
 
-    # Consultar las tareas desde PostgreSQL
     try:
         cursor, conn = get_postgres_cursor()
         if cursor:
@@ -259,7 +245,7 @@ def home():
 
             for task in tasks:
                 try:
-                    decrypted_name = cipher_suite.decrypt(task[1].encode()).decode()  # Asegúrate de que 'task[1]' es el nombre cifrado
+                    decrypted_name = cipher_suite.decrypt(task[1].encode()).decode()
                     decrypted_todos.append({**task, 'name': decrypted_name})
                 except Exception as e:
                     app.logger.error("Error al descifrar tarea: %s", str(e))
@@ -267,10 +253,12 @@ def home():
             cursor.close()
             conn.close()
 
-        return render_template('home.html', todos=decrypted_todos)
+        return render_template("home.html", todos=decrypted_todos)
+
     except Exception as e:
-        app.logger.error("Error al obtener tareas: %s", str(e))
-        return render_template('home.html', todos=[])
+        app.logger.error("Error al cargar tareas: %s", str(e))
+        flash('Error al cargar tareas.')
+        return render_template("home.html", todos=[])
 
 if __name__ == "__main__":
-    app.run(debug=True, host="0.0.0.0", port=int(os.getenv("PORT", 5000)))
+    app.run(debug=True, host='0.0.0.0', port=5000)
