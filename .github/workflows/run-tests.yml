@@ -59,7 +59,7 @@ jobs:
 
     - name: Run tests
       run: |
-        pytest --cov=app tests/
+        pytest --cov=app test/
 
     - name: Upload test coverage report
       uses: actions/upload-artifact@v3
