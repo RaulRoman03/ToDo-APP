@@ -69,9 +69,13 @@ jobs:
         python app.py &
         sleep 5  # Espera a que el servidor Flask inicie completamente
 
-    - name: Run unit and integration tests
+    - name: Run unit tests
       run: |
-        pytest --cov=app tests/unit_test/
+        pytest --cov=app test/unit/
+    
+    - name: Run integration tests
+      run: |
+        pytest --cov=app test/integration/
 
     - name: Run End-to-End tests
       run: |
