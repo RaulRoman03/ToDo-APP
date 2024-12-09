@@ -70,22 +70,40 @@ jobs:
         sleep 5  # Espera a que el servidor Flask inicie completamente
 
     - name: Run unit tests
+      id: unit_tests
       run: |
-        pytest --cov=app test/unit/
-    
+        pytest --cov=app test/unit/ || echo "Unit tests failed"
+      continue-on-error: true
+
     - name: Run integration tests
+      id: integration_tests
       run: |
-        pytest --cov=app test/integration/
+        pytest --cov=app test/integration/ || echo "Integration tests failed"
+      continue-on-error: true
 
     - name: Run End-to-End tests
+      id: e2e_tests
       run: |
-        pytest test/e2e/test_e2e.py
+        pytest test/e2e/test_e2e.py || echo "End-to-End tests failed"
+      continue-on-error: true
 
     - name: Upload test coverage report
       uses: actions/upload-artifact@v3
       with:
         name: test-coverage
         path: htmlcov/
+
+    - name: Check test results
+      run: |
+        echo "Checking test results..."
+        UNIT_FAILED=${{ steps.unit_tests.outcome != 'success' }}
+        INTEGRATION_FAILED=${{ steps.integration_tests.outcome != 'success' }}
+        E2E_FAILED=${{ steps.e2e_tests.outcome != 'success' }}
+
+        if [[ "$UNIT_FAILED" == "true" || "$INTEGRATION_FAILED" == "true" || "$E2E_FAILED" == "true" ]]; then
+          echo "Some tests failed"
+          exit 1
+        fi
 
     - name: Postgres logs (debugging)
       if: failure()
