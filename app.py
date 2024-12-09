@@ -89,7 +89,9 @@ google = oauth.register(
 
 # Funciones auxiliares
 def validate_todo_data(todo_name):
-    return todo_name.strip() if todo_name else None
+    if not todo_name or not todo_name.strip():
+        return None
+    return todo_name.strip()
 
 # Rutas
 @app.route('/register', methods=['GET', 'POST'])
