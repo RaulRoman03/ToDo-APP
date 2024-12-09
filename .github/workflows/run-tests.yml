@@ -37,7 +37,7 @@ jobs:
         ports:
           - 4444:4444
         options: >-
-          --shm-size 2g  # Para mejorar la estabilidad del navegador
+          --shm-size 2g
 
     steps:
     - name: Checkout code
