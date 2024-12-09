@@ -32,6 +32,13 @@ jobs:
         ports:
           - 27017:27017
 
+      selenium:
+        image: selenium/standalone-chrome:latest
+        ports:
+          - 4444:4444
+        options: >-
+          --shm-size 2g  # Para mejorar la estabilidad del navegador
+
     steps:
     - name: Checkout code
       uses: actions/checkout@v3
@@ -45,8 +52,7 @@ jobs:
       run: |
         python -m pip install --upgrade pip
         pip install -r requirements.txt
-        pip install pytest pytest-cov
-        pip install mongomock psycopg2-binary
+        pip install pytest pytest-cov selenium mongomock psycopg2-binary
 
     - name: Set up environment variables
       run: |
@@ -56,10 +62,20 @@ jobs:
         echo "POSTGRES_DB=test_db" >> .env
         echo "MONGO_URI=mongodb://localhost:27017/" >> .env
         echo "FLASK_SECRET_KEY=secret_key" >> .env
+        echo "BASE_URL=http://localhost:5000" >> .env
 
-    - name: Run tests
+    - name: Start Flask server
       run: |
-        pytest --cov=app test/
+        python app.py &
+        sleep 5  # Espera a que el servidor Flask inicie completamente
+
+    - name: Run unit and integration tests
+      run: |
+        pytest --cov=app tests/unit_test/
+
+    - name: Run End-to-End tests
+      run: |
+        pytest test/e2e/test_e2e.py
 
     - name: Upload test coverage report
       uses: actions/upload-artifact@v3
